@@ -75,6 +75,53 @@ flowchart LR
   C --> D["Respond to Webhook<br/>(confirmation)"]
 ```
 
+## 5. AI chat agent (thaus.co assistant)
+
+The site's chat widget calls a Next.js API route (origin check, rate limiting, timeout), which
+forwards the message to this workflow with a shared secret. The agent's knowledge base and system
+prompt live in Notion, so they can be edited without touching the workflow.
+
+```mermaid
+flowchart LR
+  A["Webhook (POST)<br/>chat message"] --> B["Code<br/>validate & limit"]
+  B --> C{"If<br/>allowed"}
+  C -- false --> R1["Respond<br/>rejected"]
+  C -- true --> D["Code<br/>check cache"]
+  D --> E{"If<br/>cached"}
+  E -- true --> G
+  E -- false --> F1["Notion<br/>get knowledge base"]
+  F1 --> F2["Notion<br/>get system prompt"]
+  F2 --> F3["Code<br/>build system prompt"]
+  F3 --> G["AI Agent<br/>(Claude Haiku)"]
+  M["Conversation memory"] -.-> G
+  T["Tool: save_lead"] -.-> G
+  G -- success --> H["Respond<br/>reply"]
+  H --> L["Notion<br/>log to chat logs"]
+  G -- error --> X["Respond<br/>agent error"]
+```
+
+## 6. Daily AI news digest
+
+Every morning four RSS feeds are merged, Claude picks and summarises the five most relevant
+stories through a direct HTTP call to the Anthropic API, and the digest is sent to Telegram.
+
+```mermaid
+flowchart LR
+  A["Schedule<br/>(daily 08:00)"] --> B1["RSS feed 1"] & B2["RSS feed 2"] & B3["RSS feed 3"] & B4["RSS feed 4"]
+  B1 & B2 & B3 & B4 --> C["Merge<br/>(append)"]
+  C --> D["Code<br/>filter & build request"]
+  D --> E["HTTP Request<br/>Anthropic API: pick top 5"]
+  E --> F["Code<br/>format message"]
+  F --> G["HTTP Request<br/>Telegram Bot API"]
+```
+
+## More
+
+A complete, importable set of seven workflows built on the same patterns (booking with
+slot-conflict detection, CRM, signed unsubscribe, retry-safe reminders and review requests, and an
+AI newsletter with fail-closed output validation) is in
+[velure-medspa](https://github.com/Tosho-dotcom/velure-medspa).
+
 ---
 
 ## Design notes
@@ -89,5 +136,7 @@ flowchart LR
 - **Spam handled at the edge.** A honeypot field on each form plus an `If` gate at
   the start of every inbound flow drops bot traffic before it reaches Notion or
   email.
+- **Prompts are data, not code.** The chat agent reads its knowledge base and system prompt
+  from Notion, so a non-technical owner can update answers without editing the workflow.
 - **Compliant email.** Every newsletter pairs with a working one-click
   unsubscribe that updates the source of truth in Notion.
